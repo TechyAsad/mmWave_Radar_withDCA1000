@@ -1,0 +1,105 @@
+
+---
+
+## Saving raw UDP packets
+
+`dca1000_lite.py` can store the live UDP packets while receiving them.
+
+Example:
+
+```bash
+mkdir -p captures
+python dca1000_lite.py live --out captures/test_001.dcaudp
+```
+
+Optional finite capture:
+
+```bash
+python dca1000_lite.py live --out captures/test_001.dcaudp --max-packets 10000
+```
+
+This saves the **raw UDP payload exactly as received** from DCA1000.
+
+It preserves packet boundaries.
+
+---
+
+## Saved file format
+
+Saved files use a tiny custom binary format:
+
+```text
+8 bytes   magic header: b"DCAUDP1\0"
+
+Then repeated packet records:
+
+8 bytes   timestamp_ns, little-endian uint64
+4 bytes   packet_length, little-endian uint32
+N bytes   raw UDP packet payload
+```
+
+Each raw UDP packet payload still contains the DCA1000 packet header:
+
+```text
+bytes 0:4   sequence number, little-endian uint32
+bytes 4:10  byte counter, little-endian 48-bit
+bytes 10:   raw ADC payload
+```
+
+So the saved file structure is:
+
+```text
+DCAUDP file header
+→ packet record 1
+   → timestamp
+   → length
+   → DCA1000 UDP payload
+→ packet record 2
+   → timestamp
+   → length
+   → DCA1000 UDP payload
+→ ...
+```
+
+---
+
+## Why not just concatenate packets?
+
+Because UDP packet boundaries matter.
+
+DCA1000 packets contain sequence numbers, byte counters, and sometimes the last packet can differ in size.
+
+So `dca1000_lite` stores:
+
+```text
+timestamp + packet length + packet bytes
+```
+
+This makes offline replay/parsing safer.
+
+---
+
+## Quick sanity check while saving
+
+Expected live output:
+
+```text
+saving raw UDP packets to: captures/test_001.dcaudp
+start_record: ok
+
+Now press Trigger Frame in mmWave Studio.
+Listening for UDP ADC packets on port 4098
+
+pkts=1000 last_seq=999 lost=0 rate=... data=... MiB last_size=...
+pkts=2000 last_seq=1999 lost=0 rate=... data=... MiB last_size=...
+```
+
+Stop using:
+
+```text
+Ctrl+C
+```
+
+The script will stop DCA1000 and flush the file.
+
+
